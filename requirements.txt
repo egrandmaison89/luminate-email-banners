@@ -1,0 +1,14 @@
+# DFMC Email Banner Processor Dependencies
+# Install with: pip install -r requirements.txt
+
+# Web App
+streamlit>=1.28.0
+
+# Image Processing
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+
+# For local CLI script (process_banners.py)
+# These are also included above, so no additional installs needed
+
