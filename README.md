@@ -1,10 +1,18 @@
-# Luminate Email Banner Processor
+# Luminate Cookbook
 
+A collection of tools to help you work with Luminate Online. All tools are accessible through a unified web interface.
+
+## 🎯 Available Tools
+
+### 🏃 Email Banner Processor
 Transform photos into perfectly-sized email banners with intelligent face detection that avoids cropping heads.
 
-## 🎯 Two Ways to Use
+### 📤 Image Uploader
+Batch upload images directly to your Luminate Online Image Library with real-time progress tracking.
 
-### Option 1: Web App (Recommended for Teams)
+## 🚀 Quick Start
+
+### Web App (Recommended for Teams)
 A user-friendly web interface - no coding required!
 
 **Try it locally:**
@@ -13,18 +21,21 @@ A user-friendly web interface - no coding required!
 pip install -r requirements.txt
 
 # Run the app
-streamlit run streamlit_app.py
+streamlit run app.py
 ```
+
+The app will open in your browser. Use the sidebar to navigate between tools.
 
 **Deploy to share with your team:**
 1. Push this folder to GitHub
 2. Go to [share.streamlit.io](https://share.streamlit.io)
 3. Connect your GitHub repo
-4. Share the URL with your team!
+4. Set the main file to `app.py`
+5. Share the URL with your team!
 
-### Option 2: Command Line Script (For Power Users)
-Process images in batch from the terminal.
+### Command Line Scripts (For Power Users)
 
+**Process banners:**
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -35,6 +46,13 @@ python process_banners.py
 ```
 
 Output will be saved to the `resized/` folder.
+
+**Upload to Luminate:**
+```bash
+# Set up credentials in .env file
+# Then run:
+python upload_to_luminate.py
+```
 
 ---
 
@@ -53,13 +71,34 @@ Output will be saved to the `resized/` folder.
 
 ```
 email_banners/
-├── streamlit_app.py      # Web app (share with team)
-├── process_banners.py    # CLI script (for local batch processing)
-├── requirements.txt      # Python dependencies
-├── README.md            # This file
-├── originals/           # Source images (for CLI)
-└── resized/             # Output images (from CLI)
+├── app.py                    # Main entry point (Luminate Cookbook)
+├── pages/                    # Multi-page app structure
+│   ├── 1_Email_Banner_Processor.py  # Email banner tool
+│   └── 2_Image_Uploader.py           # Image uploader tool
+├── luminate_uploader_lib.py  # Shared upload library
+├── process_banners.py        # CLI banner processing script
+├── upload_to_luminate.py     # CLI upload script
+├── requirements.txt          # Python dependencies
+├── README.md                 # This file
+├── originals/                # Source images (for CLI)
+└── resized/                  # Output images (from CLI)
 ```
+
+## 🛠️ Adding New Tools
+
+To add a new tool to the Luminate Cookbook:
+
+1. Create a new file in the `pages/` directory
+2. Name it with a number prefix (e.g., `3_Your_Tool.py`)
+3. Add page configuration:
+   ```python
+   st.set_page_config(
+       page_title="Your Tool",
+       page_icon="🔧",
+       layout="wide"
+   )
+   ```
+4. Streamlit will automatically add it to the navigation!
 
 ---
 
@@ -92,7 +131,7 @@ JPEG_QUALITY = 82
 3. **Click "New app"** and select:
    - Your GitHub repo
    - Branch: `main`
-   - Main file: `streamlit_app.py`
+   - Main file: `app.py`
 
 4. **Click Deploy!**
 
@@ -100,10 +139,10 @@ JPEG_QUALITY = 82
 
 Your teammates can now:
 - Visit the URL from any device
-- Upload images via drag-and-drop
-- Adjust settings with sliders
-- Add a filename prefix for their program
-- Download processed banners
+- Navigate between tools using the sidebar
+- Use the Email Banner Processor to create optimized banners
+- Use the Image Uploader to batch upload to Luminate Online
+- Access all tools from a single unified interface
 
 ---
 
@@ -116,5 +155,11 @@ Your teammates can now:
 
 ## 🏃 About
 
-Built by the Luminate team to easily create email banners from event photos.
+Built by the Luminate team. The Luminate Cookbook provides a collection of tools to streamline your workflow with Luminate Online.
+
+**Current Tools:**
+- Email Banner Processor - Create optimized email banners with smart face detection
+- Image Uploader - Batch upload images to Luminate Online Image Library
+
+**More tools coming soon!** 🎉
 

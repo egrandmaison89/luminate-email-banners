@@ -30,3 +30,18 @@ resized/
 *.tmp
 *.log
 
+
+# Cursor IDE configuration (personal settings - never commit)
+.cursor/
+**/.cursor/
+**/mcp.json
+Users/
+
+# Temp output files
+upload_log.txt
+uploaded_urls.txt
+
+# Environment variables (contains credentials - NEVER COMMIT)
+.env
+.env.local
+.env.*.local
