@@ -9,7 +9,9 @@ Can be used by both CLI scripts and web applications.
 import os
 import time
 import requests
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+import subprocess
+import sys
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout, Error as PlaywrightError
 
 # Luminate Online URLs
 LOGIN_URL = "https://secure2.convio.net/dfci/admin/AdminLogin"
@@ -242,6 +244,45 @@ def generate_url(filename):
     return BASE_URL + filename
 
 
+def ensure_playwright_browsers_installed(progress_callback=None):
+    """Check if Playwright browsers are installed, and install them if missing.
+    
+    Args:
+        progress_callback: Optional callback function for progress updates
+    
+    Returns:
+        bool: True if browsers are available, False if installation failed
+    """
+    try:
+        # Try to launch a browser to check if it's installed
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+        return True
+    except Exception as e:
+        error_str = str(e).lower()
+        # Check if it's a browser installation error
+        if "executable doesn't exist" in error_str or "browsers" in error_str:
+            try:
+                # Attempt to install browsers
+                if progress_callback:
+                    progress_callback(0, 0, "Installing Playwright browsers...", "info")
+                subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"],
+                    check=True,
+                    capture_output=True,
+                    timeout=300  # 5 minute timeout
+                )
+                return True
+            except subprocess.TimeoutExpired:
+                return False
+            except Exception:
+                return False
+        else:
+            # Re-raise if it's a different error
+            raise
+
+
 def upload_images_batch(username, password, image_paths, progress_callback=None):
     """Upload multiple images to Luminate Online.
     
@@ -262,50 +303,107 @@ def upload_images_batch(username, password, image_paths, progress_callback=None)
     failed = []
     urls = []
     
-    with sync_playwright() as p:
-        # Launch browser in headless mode (better for web apps)
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
-        
-        try:
-            # Login
-            if progress_callback:
-                progress_callback(0, len(image_paths), "Logging in...", "info")
-            login(page, username, password)
-            
-            # Navigate to Image Library
-            if progress_callback:
-                progress_callback(0, len(image_paths), "Navigating to Image Library...", "info")
-            navigate_to_image_library(page)
-            
-            # Upload each image
-            for i, image_path in enumerate(image_paths, 1):
-                filename = os.path.basename(image_path)
-                
-                if progress_callback:
-                    progress_callback(i, len(image_paths), filename, "uploading")
-                
-                success, uploaded_filename, error, url = upload_image(page, image_path, verify=True)
-                
-                if success and url:
-                    successful.append(uploaded_filename)
-                    urls.append(url)
-                    if progress_callback:
-                        progress_callback(i, len(image_paths), filename, "success")
-                else:
-                    error_msg = error or "Upload verification failed"
-                    failed.append((filename, error_msg))
-                    if progress_callback:
-                        progress_callback(i, len(image_paths), filename, "error")
-            
-        except Exception as e:
-            # If login or navigation fails, mark all as failed
+    # Ensure Playwright browsers are installed before attempting to use them
+    try:
+        if not ensure_playwright_browsers_installed(progress_callback):
+            error_msg = (
+                "Playwright browsers are not installed. "
+                "Please run: python -m playwright install chromium"
+            )
+            # Mark all images as failed with this error
             for image_path in image_paths:
                 filename = os.path.basename(image_path)
-                failed.append((filename, f"Initialization error: {str(e)}"))
-        finally:
-            browser.close()
+                failed.append((filename, error_msg))
+            return {
+                'successful': successful,
+                'failed': failed,
+                'urls': urls
+            }
+    except Exception as e:
+        # If ensure_playwright_browsers_installed raises an unexpected error
+        error_msg = f"Playwright setup error: {str(e)}"
+        for image_path in image_paths:
+            filename = os.path.basename(image_path)
+            failed.append((filename, error_msg))
+        return {
+            'successful': successful,
+            'failed': failed,
+            'urls': urls
+        }
+    
+    try:
+        with sync_playwright() as p:
+            # Launch browser in headless mode (better for web apps)
+            try:
+                browser = p.chromium.launch(headless=True)
+            except PlaywrightError as e:
+                error_str = str(e)
+                if "executable doesn't exist" in error_str.lower() or "browsers" in error_str.lower():
+                    # Provide helpful error message
+                    raise RuntimeError(
+                        "Playwright browser executable not found. "
+                        "Please run: python -m playwright install chromium\n"
+                        f"Original error: {error_str}"
+                    )
+                else:
+                    raise
+            
+            context = browser.new_context()
+            page = context.new_page()
+            
+            try:
+                # Login
+                if progress_callback:
+                    progress_callback(0, len(image_paths), "Logging in...", "info")
+                login(page, username, password)
+                
+                # Navigate to Image Library
+                if progress_callback:
+                    progress_callback(0, len(image_paths), "Navigating to Image Library...", "info")
+                navigate_to_image_library(page)
+                
+                # Upload each image
+                for i, image_path in enumerate(image_paths, 1):
+                    filename = os.path.basename(image_path)
+                    
+                    if progress_callback:
+                        progress_callback(i, len(image_paths), filename, "uploading")
+                    
+                    success, uploaded_filename, error, url = upload_image(page, image_path, verify=True)
+                    
+                    if success and url:
+                        successful.append(uploaded_filename)
+                        urls.append(url)
+                        if progress_callback:
+                            progress_callback(i, len(image_paths), filename, "success")
+                    else:
+                        error_msg = error or "Upload verification failed"
+                        failed.append((filename, error_msg))
+                        if progress_callback:
+                            progress_callback(i, len(image_paths), filename, "error")
+            
+            except Exception as e:
+                # If login or navigation fails, mark all as failed
+                for image_path in image_paths:
+                    filename = os.path.basename(image_path)
+                    failed.append((filename, f"Initialization error: {str(e)}"))
+            finally:
+                browser.close()
+    
+    except RuntimeError as e:
+        # Catch our custom RuntimeError for missing browsers
+        error_msg = str(e)
+        for image_path in image_paths:
+            filename = os.path.basename(image_path)
+            failed.append((filename, error_msg))
+    except Exception as e:
+        # Catch any other unexpected errors during browser launch
+        error_msg = f"Browser launch error: {str(e)}"
+        if "executable doesn't exist" in str(e).lower():
+            error_msg += "\nPlease run: python -m playwright install chromium"
+        for image_path in image_paths:
+            filename = os.path.basename(image_path)
+            failed.append((filename, error_msg))
     
     return {
         'successful': successful,
