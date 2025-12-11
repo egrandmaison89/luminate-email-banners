@@ -11,12 +11,20 @@ import time
 import requests
 import subprocess
 import sys
+import shutil
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout, Error as PlaywrightError
 
 # Luminate Online URLs
 LOGIN_URL = "https://secure2.convio.net/dfci/admin/AdminLogin"
 IMAGE_LIBRARY_URL = "https://secure2.convio.net/dfci/admin/ImageLibrary"
 BASE_URL = "https://danafarber.jimmyfund.org/images/content/pagebuilder/"
+
+
+def is_streamlit_cloud():
+    """Check if running on Streamlit Cloud."""
+    return os.environ.get("STREAMLIT_SHARING_MODE") == "streamlit-cloud" or \
+           os.path.exists("/app") or \
+           "streamlit" in os.environ.get("HOSTNAME", "").lower()
 
 
 def login(page, username, password):
@@ -246,6 +254,7 @@ def generate_url(filename):
 
 def ensure_playwright_browsers_installed(progress_callback=None):
     """Check if Playwright browsers are installed, and install them if missing.
+    Also ensures system dependencies are installed.
     
     Args:
         progress_callback: Optional callback function for progress updates
@@ -254,17 +263,51 @@ def ensure_playwright_browsers_installed(progress_callback=None):
         bool: True if browsers are available, False if installation failed
     """
     try:
-        # Try to launch a browser to check if it's installed
+        # Try to launch a browser to check if it's installed and working
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             browser.close()
         return True
     except Exception as e:
         error_str = str(e).lower()
+        error_message = str(e)
+        
+        # Check if it's a missing system library error (like libnspr4.so)
+        missing_lib_indicators = [
+            "cannot open shared object file",
+            "libnspr4.so",
+            "shared libraries",
+            "no such file or directory"
+        ]
+        is_missing_lib = any(indicator in error_message.lower() for indicator in missing_lib_indicators)
+        
         # Check if it's a browser installation error
-        if "executable doesn't exist" in error_str or "browsers" in error_str:
+        is_browser_missing = "executable doesn't exist" in error_str or "browsers" in error_str
+        
+        if is_missing_lib or is_browser_missing:
             try:
-                # Attempt to install browsers
+                # First, try to install system dependencies (required for Chromium to run)
+                if is_missing_lib or progress_callback:
+                    if progress_callback:
+                        progress_callback(0, 0, "Installing Playwright system dependencies...", "info")
+                    try:
+                        # Install system dependencies for Chromium
+                        subprocess.run(
+                            [sys.executable, "-m", "playwright", "install-deps", "chromium"],
+                            check=True,
+                            capture_output=True,
+                            timeout=300  # 5 minute timeout
+                        )
+                    except subprocess.CalledProcessError as deps_error:
+                        # System dependencies installation might fail in restricted environments
+                        # (like Streamlit Cloud), but we'll continue to try installing browsers
+                        if progress_callback:
+                            progress_callback(0, 0, "System dependencies installation skipped (may not be available in this environment)...", "info")
+                    except subprocess.TimeoutExpired:
+                        if progress_callback:
+                            progress_callback(0, 0, "System dependencies installation timed out, continuing...", "info")
+                
+                # Then install browser binaries
                 if progress_callback:
                     progress_callback(0, 0, "Installing Playwright browsers...", "info")
                 subprocess.run(
@@ -273,9 +316,45 @@ def ensure_playwright_browsers_installed(progress_callback=None):
                     capture_output=True,
                     timeout=300  # 5 minute timeout
                 )
-                return True
+                
+                # Try launching again after installation
+                try:
+                    with sync_playwright() as p:
+                        browser = p.chromium.launch(headless=True)
+                        browser.close()
+                    return True
+                except Exception as retry_error:
+                    # If it still fails after installation, it's likely a system dependency issue
+                    retry_error_str = str(retry_error).lower()
+                    if is_missing_lib or any(indicator in retry_error_str for indicator in missing_lib_indicators):
+                        # Provide environment-specific guidance
+                        if is_streamlit_cloud():
+                            error_msg = (
+                                f"Browser installed but missing system dependencies (likely libnspr4.so or similar). "
+                                f"This is a known issue with Playwright on Streamlit Cloud. "
+                                f"Error: {str(retry_error)}\n\n"
+                                f"Possible solutions:\n"
+                                f"1. Contact Streamlit Cloud support to ensure system dependencies are available\n"
+                                f"2. Check Streamlit Cloud deployment logs for system library errors\n"
+                                f"3. Consider using a custom Docker image with required dependencies"
+                            )
+                        else:
+                            error_msg = (
+                                f"Browser installed but missing system dependencies. "
+                                f"Please install required system libraries. "
+                                f"Error: {str(retry_error)}\n\n"
+                                f"For Linux/Docker, install packages from packages.txt:\n"
+                                f"  sudo apt update && sudo apt install -y $(cat packages.txt)\n\n"
+                                f"Or run: python -m playwright install-deps chromium"
+                            )
+                        raise RuntimeError(error_msg)
+                    raise
+                    
             except subprocess.TimeoutExpired:
                 return False
+            except RuntimeError:
+                # Re-raise RuntimeError (our custom error for missing system deps)
+                raise
             except Exception:
                 return False
         else:
@@ -319,9 +398,33 @@ def upload_images_batch(username, password, image_paths, progress_callback=None)
                 'failed': failed,
                 'urls': urls
             }
+    except RuntimeError as e:
+        # RuntimeError from ensure_playwright_browsers_installed for missing system deps
+        error_msg = str(e)
+        # Provide helpful guidance for Streamlit Cloud users
+        if "system dependencies" in error_msg.lower() or "libnspr4" in error_msg.lower():
+            error_msg += (
+                "\n\nThis error typically occurs when system libraries are missing. "
+                "If you're using Streamlit Cloud, please contact support or check the deployment logs. "
+                "The app may need to be configured with additional system dependencies."
+            )
+        for image_path in image_paths:
+            filename = os.path.basename(image_path)
+            failed.append((filename, error_msg))
+        return {
+            'successful': successful,
+            'failed': failed,
+            'urls': urls
+        }
     except Exception as e:
         # If ensure_playwright_browsers_installed raises an unexpected error
         error_msg = f"Playwright setup error: {str(e)}"
+        # Check if it's a system library error
+        if "libnspr4" in error_msg.lower() or "shared object file" in error_msg.lower():
+            error_msg += (
+                "\n\nMissing system library detected. This may require system-level dependencies "
+                "to be installed in the deployment environment."
+            )
         for image_path in image_paths:
             filename = os.path.basename(image_path)
             failed.append((filename, error_msg))
@@ -338,7 +441,35 @@ def upload_images_batch(username, password, image_paths, progress_callback=None)
                 browser = p.chromium.launch(headless=True)
             except PlaywrightError as e:
                 error_str = str(e)
-                if "executable doesn't exist" in error_str.lower() or "browsers" in error_str.lower():
+                error_lower = error_str.lower()
+                
+                # Check for missing system library errors
+                missing_lib_indicators = [
+                    "cannot open shared object file",
+                    "libnspr4.so",
+                    "shared libraries",
+                    "no such file or directory"
+                ]
+                is_missing_lib = any(indicator in error_lower for indicator in missing_lib_indicators)
+                
+                if is_missing_lib:
+                    if is_streamlit_cloud():
+                        raise RuntimeError(
+                            f"Missing system library detected (likely libnspr4.so or similar). "
+                            f"This is a known issue with Playwright on Streamlit Cloud. "
+                            f"Error: {error_str}\n\n"
+                            f"Please contact Streamlit Cloud support or check deployment logs. "
+                            f"System dependencies from packages.txt need to be available."
+                        )
+                    else:
+                        raise RuntimeError(
+                            f"Missing system library detected. "
+                            f"Error: {error_str}\n\n"
+                            f"Please install system dependencies:\n"
+                            f"  sudo apt update && sudo apt install -y $(cat packages.txt)\n"
+                            f"Or run: python -m playwright install-deps chromium"
+                        )
+                elif "executable doesn't exist" in error_lower or "browsers" in error_lower:
                     # Provide helpful error message
                     raise RuntimeError(
                         "Playwright browser executable not found. "
@@ -388,7 +519,12 @@ def upload_images_batch(username, password, image_paths, progress_callback=None)
                     filename = os.path.basename(image_path)
                     failed.append((filename, f"Initialization error: {str(e)}"))
             finally:
-                browser.close()
+                # Safely close browser if it was created
+                try:
+                    if 'browser' in locals() and browser:
+                        browser.close()
+                except:
+                    pass  # Browser may not have been created or already closed
     
     except RuntimeError as e:
         # Catch our custom RuntimeError for missing browsers
@@ -399,8 +535,33 @@ def upload_images_batch(username, password, image_paths, progress_callback=None)
     except Exception as e:
         # Catch any other unexpected errors during browser launch
         error_msg = f"Browser launch error: {str(e)}"
-        if "executable doesn't exist" in str(e).lower():
+        error_lower = str(e).lower()
+        
+        # Check for system library errors
+        missing_lib_indicators = [
+            "cannot open shared object file",
+            "libnspr4.so",
+            "shared libraries",
+            "no such file or directory"
+        ]
+        is_missing_lib = any(indicator in error_lower for indicator in missing_lib_indicators)
+        
+        if is_missing_lib:
+            if is_streamlit_cloud():
+                error_msg += (
+                    "\n\nMissing system library detected. This is a known issue with Playwright on Streamlit Cloud. "
+                    "Please contact Streamlit Cloud support or check deployment logs. "
+                    "System dependencies from packages.txt need to be available."
+                )
+            else:
+                error_msg += (
+                    "\n\nMissing system library detected. Please install system dependencies:\n"
+                    "  sudo apt update && sudo apt install -y $(cat packages.txt)\n"
+                    "Or run: python -m playwright install-deps chromium"
+                )
+        elif "executable doesn't exist" in error_lower:
             error_msg += "\nPlease run: python -m playwright install chromium"
+        
         for image_path in image_paths:
             filename = os.path.basename(image_path)
             failed.append((filename, error_msg))

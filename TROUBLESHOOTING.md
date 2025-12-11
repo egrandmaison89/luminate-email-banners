@@ -59,3 +59,88 @@ If the above doesn't work:
 2. Check GitHub repository settings for any restrictions
 3. Try accessing the repository directly: https://github.com/egrandmaison89/luminate-cookbook
 4. Verify `app.py` exists in the root of the `main` branch
+
+---
+
+# Troubleshooting: Playwright Browser Launch Error
+
+## Error: "libnspr4.so: cannot open shared object file" or "Browser launch error"
+
+This error occurs when Playwright's Chromium browser is missing required system libraries. This is common in containerized environments like Streamlit Cloud.
+
+### Symptoms
+- Error message: `error while loading shared libraries: libnspr4.so: cannot open shared object file`
+- Browser fails to launch when using the Image Uploader tool
+- Error appears in Streamlit Cloud logs
+
+### Solutions
+
+#### For Streamlit Cloud Deployment
+
+Streamlit Cloud should have system dependencies available, but if you encounter this error:
+
+1. **Check Deployment Logs**
+   - Go to Streamlit Cloud dashboard
+   - Check the deployment logs for any system library errors
+   - Look for messages about missing dependencies
+
+2. **Contact Streamlit Cloud Support**
+   - This may indicate that the base image is missing required libraries
+   - Streamlit Cloud support can help ensure system dependencies are available
+   - Reference: The app needs libraries from `packages.txt` to be available
+
+3. **Verify Playwright Installation**
+   - The app automatically installs Playwright browsers on first use
+   - Check logs to ensure `playwright install chromium` completed successfully
+   - If installation failed, you'll see a different error message
+
+#### For Local/Docker Deployment
+
+If running locally or in Docker:
+
+1. **Install System Dependencies**
+   ```bash
+   # On Debian/Ubuntu:
+   sudo apt update
+   sudo apt install -y $(cat packages.txt)
+   
+   # Or install Playwright's system dependencies:
+   python -m playwright install-deps chromium
+   ```
+
+2. **Verify Installation**
+   ```bash
+   python -m playwright install chromium
+   python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); print('OK')"
+   ```
+
+3. **Dockerfile Example**
+   If using a custom Dockerfile, add:
+   ```dockerfile
+   RUN apt-get update && apt-get install -y $(cat packages.txt) && rm -rf /var/lib/apt/lists/*
+   RUN pip install -r requirements.txt
+   RUN python -m playwright install chromium
+   RUN python -m playwright install-deps chromium
+   ```
+
+### What the App Does Automatically
+
+The app tries to:
+1. Detect if browsers are installed
+2. Install Playwright browsers if missing
+3. Install system dependencies (may fail in restricted environments like Streamlit Cloud)
+4. Provide helpful error messages with next steps
+
+### Required System Libraries
+
+The following libraries are needed (see `packages.txt`):
+- `libnspr4` - Netscape Portable Runtime
+- `libnss3` - Network Security Services
+- Additional Chromium dependencies (GTK, X11, etc.)
+
+### Still Having Issues?
+
+1. Check the full error message in Streamlit Cloud logs
+2. Verify `playwright>=1.40.0` is in `requirements.txt`
+3. Try redeploying the app (sometimes fixes dependency issues)
+4. For Streamlit Cloud: Contact support with the error message and reference to `packages.txt`
