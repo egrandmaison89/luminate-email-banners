@@ -1,0 +1,67 @@
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+env/
+venv/
+.venv/
+.conda/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.cursor/
+
+# Project specific
+originals/
+resized/
+*.tmp
+*.log
+upload_log.txt
+uploaded_urls.txt
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# PDF files (not needed for runtime)
+*.pdf
+
+# Dev container config (not needed in runtime)
+.devcontainer/
+devcontainer.json
+
+# Test files (if any)
+tests/
+test_*.py
+*_test.py
+
+# Deployment docs (not needed in container)
+DEPLOYMENT*.md
+TROUBLESHOOTING.md
+QUICK_START.md
+STREAMLIT_CLOUD_UPDATE.md
+FIX_DEPLOYMENT_ERROR.md
+
+# Text files with URLs (not needed)
+smugmug_urls.txt

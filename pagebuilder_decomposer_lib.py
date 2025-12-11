@@ -9,9 +9,25 @@ for Streamlit download operations.
 
 import re
 import requests
+import os
 from typing import Dict, List, Set, Optional, Callable, Tuple
 from urllib.parse import urljoin, urlparse, parse_qs
 from collections import defaultdict
+
+
+def _safe_debug_log(data: dict):
+    """Safely write to debug log, creating directory if needed. Silently fails on errors."""
+    try:
+        debug_log_path = '/workspaces/luminate-cookbook/.cursor/debug.log'
+        debug_log_dir = os.path.dirname(debug_log_path)
+        # Create directory if it doesn't exist
+        os.makedirs(debug_log_dir, exist_ok=True)
+        # Write to log file
+        import json
+        with open(debug_log_path, 'a') as f:
+            f.write(json.dumps(data) + '\n')
+    except Exception:
+        pass  # Silently fail - debug logging should never break functionality
 
 
 class HierarchicalLuminateWorkflow:
@@ -174,9 +190,7 @@ class HierarchicalLuminateWorkflow:
                     cleaned_hierarchy[parent] = cleaned_children
         
         # #region agent log
-        with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"pagebuilder_decomposer_lib.py:172","message":"build_hierarchy_map: cleaned hierarchy","data":{"original_size":len(hierarchy),"cleaned_size":len(cleaned_hierarchy),"cleaned_keys":list(cleaned_hierarchy.keys())[:10]}})+'\n')
+        _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"pagebuilder_decomposer_lib.py:172","message":"build_hierarchy_map: cleaned hierarchy","data":{"original_size":len(hierarchy),"cleaned_size":len(cleaned_hierarchy),"cleaned_keys":list(cleaned_hierarchy.keys())[:10]}})
         # #endregion
         
         return cleaned_hierarchy
@@ -202,12 +216,7 @@ class HierarchicalLuminateWorkflow:
         ignore_set = set(ignore_pagebuilders)
         
         # #region agent log
-        try:
-            import json
-            with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"ALL","location":"pagebuilder_decomposer_lib.py:188","message":"decompose_pagebuilder: FUNCTION CALLED","data":{"main_pagename":main_pagename,"ignore_pagebuilders":ignore_pagebuilders}})+'\n')
-        except Exception as e:
-            pass  # Silently fail logging
+        _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"ALL","location":"pagebuilder_decomposer_lib.py:188","message":"decompose_pagebuilder: FUNCTION CALLED","data":{"main_pagename":main_pagename,"ignore_pagebuilders":ignore_pagebuilders}})
         # #endregion
         
         # Reset internal state for new decomposition
@@ -249,23 +258,13 @@ class HierarchicalLuminateWorkflow:
         processed_components = set()
         
         # #region agent log
-        try:
-            import json
-            with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"A,B,C,D,E","location":"pagebuilder_decomposer_lib.py:234","message":"decompose_pagebuilder: starting","data":{"main_pagename":main_pagename,"main_direct_children":main_direct_children,"filtered_children":filtered_children,"filtered_count":len(filtered_children),"ignore_pagebuilders":ignore_pagebuilders,"hierarchy_keys":list(hierarchy.keys())[:10],"hierarchy_size":len(hierarchy)}})+'\n')
-        except Exception as e:
-            pass
+        _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"A,B,C,D,E","location":"pagebuilder_decomposer_lib.py:234","message":"decompose_pagebuilder: starting","data":{"main_pagename":main_pagename,"main_direct_children":main_direct_children,"filtered_children":filtered_children,"filtered_count":len(filtered_children),"ignore_pagebuilders":ignore_pagebuilders,"hierarchy_keys":list(hierarchy.keys())[:10],"hierarchy_size":len(hierarchy)}})
         # #endregion
         
         # Process components hierarchically
         for component in filtered_children:
             # #region agent log
-            try:
-                import json
-                with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B,C","location":"pagebuilder_decomposer_lib.py:300","message":"decompose_pagebuilder: processing component","data":{"component":component,"already_processed":component in processed_components,"hierarchy_children":hierarchy.get(component, [])[:5],"included":inclusion_status.get(component, True)}})+'\n')
-            except:
-                pass
+            _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"B,C","location":"pagebuilder_decomposer_lib.py:300","message":"decompose_pagebuilder: processing component","data":{"component":component,"already_processed":component in processed_components,"hierarchy_children":hierarchy.get(component, [])[:5],"included":inclusion_status.get(component, True)}})
             # #endregion
             # Only process if included and not already processed
             # Check processed_components here to skip duplicates in filtered_children
@@ -277,22 +276,12 @@ class HierarchicalLuminateWorkflow:
                     inclusion_status=inclusion_status
                 )
                 # #region agent log
-                try:
-                    import json
-                    with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,D","location":"pagebuilder_decomposer_lib.py:252","message":"decompose_pagebuilder: got result from _create_component_hierarchy","data":{"component":component,"result_files_count":len(result),"result_keys":list(result.keys())[:5]}})+'\n')
-                except:
-                    pass
+                _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,D","location":"pagebuilder_decomposer_lib.py:252","message":"decompose_pagebuilder: got result from _create_component_hierarchy","data":{"component":component,"result_files_count":len(result),"result_keys":list(result.keys())[:5]}})
                 # #endregion
                 files.update(result)
         
         # #region agent log
-        try:
-            import json
-            with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:290","message":"decompose_pagebuilder: final result","data":{"total_files":len(files),"file_keys":list(files.keys())[:10]}})+'\n')
-        except:
-            pass
+        _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:290","message":"decompose_pagebuilder: final result","data":{"total_files":len(files),"file_keys":list(files.keys())[:10]}})
         # #endregion
         return files, inclusion_status, complete_hierarchy
     
@@ -314,20 +303,13 @@ class HierarchicalLuminateWorkflow:
         files = {}
         
         # #region agent log
-        try:
-            import json
-            with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C,D","location":"pagebuilder_decomposer_lib.py:320","message":"_create_component_hierarchy: entry","data":{"pagename":pagename,"parent_path":parent_path,"in_ignore_set":pagename in ignore_set,"in_processed":pagename in processed_components,"included":inclusion_status.get(pagename, True),"processed_count":len(processed_components)}})+'\n')
-        except:
-            pass
+        _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C,D","location":"pagebuilder_decomposer_lib.py:320","message":"_create_component_hierarchy: entry","data":{"pagename":pagename,"parent_path":parent_path,"in_ignore_set":pagename in ignore_set,"in_processed":pagename in processed_components,"included":inclusion_status.get(pagename, True),"processed_count":len(processed_components)}})
         # #endregion
         
         # Skip if this PageBuilder should be ignored or excluded
         if pagename in ignore_set or not inclusion_status.get(pagename, True):
             # #region agent log
-            with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                import json
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"pagebuilder_decomposer_lib.py:250","message":"_create_component_hierarchy: skipped (ignored)","data":{"pagename":pagename}})+'\n')
+            _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"pagebuilder_decomposer_lib.py:250","message":"_create_component_hierarchy: skipped (ignored)","data":{"pagename":pagename}})
             # #endregion
             return files
         
@@ -336,9 +318,7 @@ class HierarchicalLuminateWorkflow:
         # when it appears as a child of multiple parents
         if pagename in processed_components:
             # #region agent log
-            with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                import json
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C,D","location":"pagebuilder_decomposer_lib.py:256","message":"_create_component_hierarchy: skipped (already processed)","data":{"pagename":pagename,"parent_path":parent_path}})+'\n')
+            _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C,D","location":"pagebuilder_decomposer_lib.py:256","message":"_create_component_hierarchy: skipped (already processed)","data":{"pagename":pagename,"parent_path":parent_path}})
             # #endregion
             return files
         
@@ -354,9 +334,7 @@ class HierarchicalLuminateWorkflow:
         children = hierarchy.get(pagename, [])
         
         # #region agent log
-        with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B,E","location":"pagebuilder_decomposer_lib.py:264","message":"_create_component_hierarchy: checking children","data":{"pagename":pagename,"children_count":len(children),"children":children[:5]}})+'\n')
+        _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"B,E","location":"pagebuilder_decomposer_lib.py:264","message":"_create_component_hierarchy: checking children","data":{"pagename":pagename,"children_count":len(children),"children":children[:5]}})
         # #endregion
         
         if children:
@@ -368,21 +346,11 @@ class HierarchicalLuminateWorkflow:
                 file_path = f"{parent_path}/{pagename}.html"
                 files[file_path] = reconstructed_html
                 # #region agent log
-                try:
-                    import json
-                    with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:335","message":"_create_component_hierarchy: created file (with children)","data":{"pagename":pagename,"file_path":file_path,"file_size":len(reconstructed_html)}})+'\n')
-                except:
-                    pass
+                _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:335","message":"_create_component_hierarchy: created file (with children)","data":{"pagename":pagename,"file_path":file_path,"file_size":len(reconstructed_html)}})
                 # #endregion
             except Exception as e:
                 # #region agent log
-                try:
-                    import json
-                    with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:345","message":"_create_component_hierarchy: error creating file (with children)","data":{"pagename":pagename,"error":str(e),"error_type":type(e).__name__}})+'\n')
-                except:
-                    pass
+                _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:345","message":"_create_component_hierarchy: error creating file (with children)","data":{"pagename":pagename,"error":str(e),"error_type":type(e).__name__}})
                 # #endregion
                 return files
         else:
@@ -392,21 +360,11 @@ class HierarchicalLuminateWorkflow:
                 file_path = f"{parent_path}/{pagename}.html"
                 files[file_path] = clean_html
                 # #region agent log
-                try:
-                    import json
-                    with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:360","message":"_create_component_hierarchy: created file (no children)","data":{"pagename":pagename,"file_path":file_path,"file_size":len(clean_html)}})+'\n')
-                except:
-                    pass
+                _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:360","message":"_create_component_hierarchy: created file (no children)","data":{"pagename":pagename,"file_path":file_path,"file_size":len(clean_html)}})
                 # #endregion
             except Exception as e:
                 # #region agent log
-                try:
-                    import json
-                    with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:370","message":"_create_component_hierarchy: error creating file (no children)","data":{"pagename":pagename,"error":str(e),"error_type":type(e).__name__}})+'\n')
-                except:
-                    pass
+                _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:370","message":"_create_component_hierarchy: error creating file (no children)","data":{"pagename":pagename,"error":str(e),"error_type":type(e).__name__}})
                 # #endregion
                 return files
         
@@ -415,25 +373,19 @@ class HierarchicalLuminateWorkflow:
             children_dir = f"{parent_path}/{pagename}_components"
             for child in children:
                 # #region agent log
-                with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                    import json
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B,E","location":"pagebuilder_decomposer_lib.py:303","message":"_create_component_hierarchy: processing child","data":{"parent":pagename,"child":child,"child_ignored":child in ignore_set,"child_processed":child in processed_components}})+'\n')
+                _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"B,E","location":"pagebuilder_decomposer_lib.py:303","message":"_create_component_hierarchy: processing child","data":{"parent":pagename,"child":child,"child_ignored":child in ignore_set,"child_processed":child in processed_components}})
                 # #endregion
                 if child not in ignore_set and child not in processed_components and inclusion_status.get(child, True):
                     child_result = self._create_component_hierarchy(
                         child, hierarchy, children_dir, level + 1, progress_callback, ignore_pagebuilders, processed_components, inclusion_status
                     )
                     # #region agent log
-                    with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                        import json
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,D","location":"pagebuilder_decomposer_lib.py:310","message":"_create_component_hierarchy: got child result","data":{"parent":pagename,"child":child,"child_result_count":len(child_result)}})+'\n')
+                    _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,D","location":"pagebuilder_decomposer_lib.py:310","message":"_create_component_hierarchy: got child result","data":{"parent":pagename,"child":child,"child_result_count":len(child_result)}})
                     # #endregion
                     files.update(child_result)
         
         # #region agent log
-        with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:316","message":"_create_component_hierarchy: returning","data":{"pagename":pagename,"files_count":len(files),"file_keys":list(files.keys())}})+'\n')
+        _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"pagebuilder_decomposer_lib.py:316","message":"_create_component_hierarchy: returning","data":{"pagename":pagename,"files_count":len(files),"file_keys":list(files.keys())}})
         # #endregion
         return files
     

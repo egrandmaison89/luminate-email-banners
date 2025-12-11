@@ -9,8 +9,24 @@ Download all nested PageBuilders as separate HTML files in a ZIP archive.
 import streamlit as st
 import zipfile
 import io
+import os
 from typing import Optional
 from pagebuilder_decomposer_lib import HierarchicalLuminateWorkflow
+
+
+def _safe_debug_log(data: dict):
+    """Safely write to debug log, creating directory if needed. Silently fails on errors."""
+    try:
+        debug_log_path = '/workspaces/luminate-cookbook/.cursor/debug.log'
+        debug_log_dir = os.path.dirname(debug_log_path)
+        # Create directory if it doesn't exist
+        os.makedirs(debug_log_dir, exist_ok=True)
+        # Write to log file
+        import json
+        with open(debug_log_path, 'a') as f:
+            f.write(json.dumps(data) + '\n')
+    except Exception:
+        pass  # Silently fail - debug logging should never break functionality
 
 # Page configuration
 st.set_page_config(
@@ -167,12 +183,7 @@ def create_zip_from_files(files: dict, main_pagename: str) -> bytes:
     zip_buffer = io.BytesIO()
     
     # #region agent log
-    try:
-        import json
-        with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"ZIP","location":"3_PageBuilder_Decomposer.py:53","message":"create_zip_from_files: starting","data":{"files_count":len(files),"main_pagename":main_pagename,"file_keys_sample":list(files.keys())[:10]}})+'\n')
-    except:
-        pass
+    _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"ZIP","location":"3_PageBuilder_Decomposer.py:53","message":"create_zip_from_files: starting","data":{"files_count":len(files),"main_pagename":main_pagename,"file_keys_sample":list(files.keys())[:10]}})
     # #endregion
     
     files_added = 0
@@ -189,12 +200,7 @@ def create_zip_from_files(files: dict, main_pagename: str) -> bytes:
                 files_added += 1
     
     # #region agent log
-    try:
-        import json
-        with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"ZIP","location":"3_PageBuilder_Decomposer.py:75","message":"create_zip_from_files: completed","data":{"files_added":files_added,"zip_size":len(zip_buffer.getvalue())}})+'\n')
-    except:
-        pass
+    _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"ZIP","location":"3_PageBuilder_Decomposer.py:75","message":"create_zip_from_files: completed","data":{"files_added":files_added,"zip_size":len(zip_buffer.getvalue())}})
     # #endregion
     
     zip_buffer.seek(0)
@@ -367,12 +373,7 @@ def main():
         # Decompose
         try:
             # #region agent log
-            try:
-                import json
-                with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"ALL","location":"3_PageBuilder_Decomposer.py:179","message":"Streamlit: about to call decompose_pagebuilder","data":{"pagename":pagename,"ignore_list":ignore_list}})+'\n')
-            except:
-                pass
+            _safe_debug_log({"sessionId":"debug-session","runId":"run1","hypothesisId":"ALL","location":"3_PageBuilder_Decomposer.py:179","message":"Streamlit: about to call decompose_pagebuilder","data":{"pagename":pagename,"ignore_list":ignore_list}})
             # #endregion
             status_text.info(f"🔍 Starting decomposition of '{pagename}'...")
             if ignore_list:
@@ -380,16 +381,7 @@ def main():
             files, inclusion_status, complete_hierarchy = workflow.decompose_pagebuilder(pagename, progress_callback, ignore_pagebuilders=ignore_list)
             
             # #region agent log
-            try:
-                import json
-                with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"ALL","location":"3_PageBuilder_Decomposer.py:191","message":"Streamlit: decompose_pagebuilder returned","data":{"files_count":len(files),"file_keys":list(files.keys())[:20],"all_keys":list(files.keys())}})+'\n')
-            except Exception as e:
-                try:
-                    with open('/workspaces/luminate-cookbook/.cursor/debug.log', 'a') as f:
-                        f.write(f"ERROR in logging: {str(e)}\n")
-                except:
-                    pass
+            _safe_debug_log({"sessionId":"debug-session","runId":"run2","hypothesisId":"ALL","location":"3_PageBuilder_Decomposer.py:191","message":"Streamlit: decompose_pagebuilder returned","data":{"files_count":len(files),"file_keys":list(files.keys())[:20],"all_keys":list(files.keys())}})
             # #endregion
             
             if not files:
