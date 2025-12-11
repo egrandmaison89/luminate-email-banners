@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 import tempfile
 import os
 import json
-from luminate_uploader_lib import upload_images_batch
+from luminate_uploader_lib import upload_images_batch, check_playwright_available
 
 # Page configuration
 st.set_page_config(
@@ -66,6 +66,32 @@ def main():
     st.title("📤 Image Uploader")
     st.markdown("---")
     
+    # Check if Playwright is available
+    playwright_available, playwright_error = check_playwright_available()
+    
+    if not playwright_available:
+        # Show error message if browser automation is not available
+        st.markdown("""
+        <div class="error-box">
+        <strong>⚠️ Browser Automation Unavailable</strong><br><br>
+        The Image Uploader requires browser automation to upload images to Luminate Online.
+        This feature is currently not available in this environment.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("### What does this mean?")
+        st.info(playwright_error or "Browser automation is not available.")
+        
+        st.markdown("### What can you do?")
+        st.markdown("""
+        - **If you're using Streamlit Cloud**: This may be a temporary issue. Try refreshing the page or contact support.
+        - **If you're running locally**: Make sure Playwright and its dependencies are installed.
+        - **Alternative**: You can upload images directly through the Luminate Online web interface.
+        """)
+        
+        # Don't show the upload form if Playwright is not available
+        return
+    
     st.markdown("""
     <div class="info-box">
     <strong>Welcome!</strong> Upload multiple images to your Luminate Online Image Library in just a few clicks.
@@ -113,8 +139,8 @@ def main():
     # Step 3: Upload Button
     st.markdown("---")
     
-    # Validate inputs
-    can_upload = username and password and uploaded_files and not st.session_state.uploading
+    # Validate inputs (only allow upload if Playwright is available)
+    can_upload = playwright_available and username and password and uploaded_files and not st.session_state.uploading
     
     if st.button(
         "🚀 Upload All Images",

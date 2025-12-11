@@ -184,7 +184,27 @@ def email_banner_page():
 def image_uploader_page():
     """Image Uploader page."""
     file_path = os.path.join(os.path.dirname(__file__), "pages", "2_Image_Uploader.py")
-    load_and_run_page(file_path)
+    try:
+        load_and_run_page(file_path)
+    except ImportError as e:
+        # Handle import errors gracefully (e.g., if luminate_uploader_lib fails to import)
+        st.error("⚠️ Image Uploader is currently unavailable")
+        st.markdown("""
+        <div style="padding: 1em; background-color: #fff3cd; border-radius: 5px; border: 1px solid #ffc107; margin: 1em 0;">
+        <strong>Browser automation is not available.</strong><br><br>
+        The Image Uploader requires browser automation to upload images to Luminate Online.
+        This feature may not be available in all deployment environments.<br><br>
+        <strong>Possible solutions:</strong><br>
+        • If you're using Streamlit Cloud, check deployment logs for dependency issues<br>
+        • Contact support if this is a persistent issue<br>
+        • Try using the tool locally where dependencies can be installed
+        </div>
+        """, unsafe_allow_html=True)
+        st.info(f"Technical details: {str(e)}")
+    except Exception as e:
+        # Handle any other errors gracefully
+        st.error("⚠️ An error occurred loading the Image Uploader")
+        st.exception(e)
 
 
 def pagebuilder_decomposer_page():

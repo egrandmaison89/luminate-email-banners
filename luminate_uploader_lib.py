@@ -12,7 +12,9 @@ import requests
 import subprocess
 import sys
 import shutil
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout, Error as PlaywrightError
+
+# Playwright imports are lazy-loaded to prevent app crashes if dependencies are missing
+# Use _import_playwright() helper function to safely import Playwright when needed
 
 # Luminate Online URLs
 LOGIN_URL = "https://secure2.convio.net/dfci/admin/AdminLogin"
@@ -25,6 +27,30 @@ def is_streamlit_cloud():
     return os.environ.get("STREAMLIT_SHARING_MODE") == "streamlit-cloud" or \
            os.path.exists("/app") or \
            "streamlit" in os.environ.get("HOSTNAME", "").lower()
+
+
+def _import_playwright():
+    """Safely import Playwright modules.
+    
+    Returns:
+        tuple: (sync_playwright, PlaywrightTimeout, PlaywrightError) or raises ImportError
+        
+    Raises:
+        ImportError: If Playwright cannot be imported
+        RuntimeError: If Playwright is installed but not functional
+    """
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout, Error as PlaywrightError
+        return sync_playwright, PlaywrightTimeout, PlaywrightError
+    except ImportError as e:
+        raise ImportError(
+            "Playwright is not installed. Please install it with: pip install playwright && python -m playwright install chromium"
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to import Playwright: {str(e)}. "
+            "This may indicate a dependency issue. Please check your installation."
+        ) from e
 
 
 def login(page, username, password):
@@ -241,15 +267,76 @@ def upload_image(page, image_path, verify=True):
         
         return (True, filename, None, url)
         
-    except PlaywrightTimeout as e:
-        return (False, filename, f"Timeout: {str(e)}", None)
     except Exception as e:
+        # Check if it's a Playwright timeout error
+        error_str = str(e).lower()
+        if "timeout" in error_str:
+            return (False, filename, f"Timeout: {str(e)}", None)
         return (False, filename, str(e), None)
 
 
 def generate_url(filename):
     """Generate the URL for an uploaded image."""
     return BASE_URL + filename
+
+
+def check_playwright_available():
+    """Check if Playwright is available and can be used.
+    
+    This function safely checks if Playwright can be imported and initialized
+    without actually launching a browser. Used by the UI to show appropriate
+    status messages.
+    
+    Returns:
+        tuple: (available: bool, error_message: str or None)
+        - available: True if Playwright can be used, False otherwise
+        - error_message: None if available, otherwise a user-friendly error message
+    """
+    try:
+        # Try to import Playwright
+        sync_playwright, _, _ = _import_playwright()
+        
+        # Try to initialize Playwright (this checks if it's properly installed)
+        # We don't launch a browser here to avoid overhead
+        try:
+            p = sync_playwright().start()
+            p.stop()
+        except Exception as e:
+            error_str = str(e).lower()
+            error_message = str(e)
+            
+            # Check for missing system library errors
+            missing_lib_indicators = [
+                "cannot open shared object file",
+                "libnspr4.so",
+                "shared libraries",
+                "no such file or directory"
+            ]
+            is_missing_lib = any(indicator in error_message.lower() for indicator in missing_lib_indicators)
+            
+            if is_missing_lib:
+                if is_streamlit_cloud():
+                    return (False, (
+                        "Browser automation is not available due to missing system dependencies. "
+                        "This is a known limitation on Streamlit Cloud. "
+                        "Please contact Streamlit Cloud support or check deployment logs."
+                    ))
+                else:
+                    return (False, (
+                        "Browser automation is not available due to missing system dependencies. "
+                        "Please install required libraries. See packages.txt for details."
+                    ))
+            else:
+                return (False, f"Playwright initialization failed: {str(e)}")
+        
+        return (True, None)
+        
+    except ImportError as e:
+        return (False, "Playwright is not installed. Browser automation is not available.")
+    except RuntimeError as e:
+        return (False, f"Playwright setup error: {str(e)}")
+    except Exception as e:
+        return (False, f"Unexpected error checking Playwright: {str(e)}")
 
 
 def ensure_playwright_browsers_installed(progress_callback=None):
@@ -261,7 +348,17 @@ def ensure_playwright_browsers_installed(progress_callback=None):
     
     Returns:
         bool: True if browsers are available, False if installation failed
+        
+    Raises:
+        ImportError: If Playwright cannot be imported
+        RuntimeError: If system dependencies are missing
     """
+    # Lazy import Playwright
+    try:
+        sync_playwright, _, _ = _import_playwright()
+    except (ImportError, RuntimeError) as e:
+        raise RuntimeError(f"Cannot use browser automation: {str(e)}") from e
+    
     try:
         # Try to launch a browser to check if it's installed and working
         with sync_playwright() as p:
@@ -319,6 +416,7 @@ def ensure_playwright_browsers_installed(progress_callback=None):
                 
                 # Try launching again after installation
                 try:
+                    sync_playwright, _, _ = _import_playwright()
                     with sync_playwright() as p:
                         browser = p.chromium.launch(headless=True)
                         browser.close()
@@ -425,6 +523,20 @@ def upload_images_batch(username, password, image_paths, progress_callback=None)
                 "\n\nMissing system library detected. This may require system-level dependencies "
                 "to be installed in the deployment environment."
             )
+        for image_path in image_paths:
+            filename = os.path.basename(image_path)
+            failed.append((filename, error_msg))
+        return {
+            'successful': successful,
+            'failed': failed,
+            'urls': urls
+        }
+    
+    # Lazy import Playwright
+    try:
+        sync_playwright, _, PlaywrightError = _import_playwright()
+    except (ImportError, RuntimeError) as e:
+        error_msg = f"Cannot use browser automation: {str(e)}"
         for image_path in image_paths:
             filename = os.path.basename(image_path)
             failed.append((filename, error_msg))
