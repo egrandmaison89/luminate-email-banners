@@ -8,6 +8,7 @@ Can be used by both CLI scripts and web applications.
 
 import os
 import time
+import random
 import requests
 import subprocess
 import sys
@@ -54,19 +55,47 @@ def _import_playwright():
 
 
 def login(page, username, password):
-    """Log into Luminate Online with provided credentials."""
+    """Log into Luminate Online with provided credentials.
+    
+    Uses human-like behavior patterns to avoid triggering 2FA:
+    - Simulates realistic typing speed
+    - Adds random delays between actions
+    - Waits appropriately for page loads
+    """
     page.goto(LOGIN_URL)
     
     # Wait for the page to fully load
     page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(2000)  # Extra wait for JS to initialize
+    # Add a small random delay to simulate human reading time
+    page.wait_for_timeout(2000 + random.randint(0, 1000))
     
     # Use role-based selectors which are more reliable
     username_input = page.get_by_role("textbox").first
     password_input = page.get_by_role("textbox").nth(1)
     
-    username_input.fill(username)
-    password_input.fill(password)
+    # Simulate human typing for username (not instant fill)
+    username_input.click()
+    page.wait_for_timeout(random.randint(100, 300))  # Brief pause before typing
+    
+    # Clear any existing content and type username character by character with human-like delays
+    username_input.clear()
+    for char in username:
+        username_input.type(char, delay=random.randint(50, 150))
+    
+    # Small pause after typing username (human behavior)
+    page.wait_for_timeout(random.randint(200, 500))
+    
+    # Move to password field
+    password_input.click()
+    page.wait_for_timeout(random.randint(100, 300))
+    
+    # Clear any existing content and type password character by character with human-like delays
+    password_input.clear()
+    for char in password:
+        password_input.type(char, delay=random.randint(50, 150))
+    
+    # Brief pause before clicking submit (human behavior)
+    page.wait_for_timeout(random.randint(300, 800))
     
     # Submit the form by clicking the Log In button
     page.get_by_role("button", name="Log In").click()
@@ -565,8 +594,67 @@ def upload_images_batch(username, password, image_paths, progress_callback=None)
                 else:
                     raise
             
-            context = browser.new_context()
+            # Create browser context with realistic settings to avoid 2FA triggers
+            # These settings make the browser appear more like a real user session
+            context = browser.new_context(
+                # Use a realistic user agent (Chrome on Windows)
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                # Set realistic viewport size (common desktop resolution)
+                viewport={'width': 1920, 'height': 1080},
+                # Set locale and timezone (US-based defaults)
+                locale='en-US',
+                timezone_id='America/New_York',
+                # Set color scheme preference
+                color_scheme='light',
+                # Grant common permissions to appear more like a real browser
+                permissions=['geolocation'],
+                # Set extra HTTP headers that real browsers send
+                extra_http_headers={
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Cache-Control': 'max-age=0',
+                }
+            )
+            
             page = context.new_page()
+            
+            # Inject JavaScript to hide automation indicators
+            # This helps avoid detection by anti-bot systems
+            page.add_init_script("""
+                // Override webdriver property
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+                
+                // Override plugins to appear more realistic
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+                
+                // Override languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
+                });
+                
+                // Override permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+                
+                // Chrome runtime override
+                window.chrome = {
+                    runtime: {}
+                };
+            """)
             
             try:
                 # Login
